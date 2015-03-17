@@ -1,6 +1,5 @@
 import cPickle as pickle
 import sys
-sys.path.append("C:\Users\eris\Programs\code\python\lib")
 from cyclic_processes import *
 
 vec = [1416842797, 1416832334, 1416850621, 1416850902, 1416838009, 1416843788, 1416847972,
@@ -15,15 +14,29 @@ vec = [1416842797, 1416832334, 1416850621, 1416850902, 1416838009, 1416843788, 1
        1416838359, 1416845006, 1416850779, 1416850937, 1416850869, 1416847879, 1416838275,
        1416847727]
        
-#timestamps_vec, ind = time_wrap(vec)
+timestamps_vec, ind = time_wrap(vec)
 
-timestamps_vec = [v % 86400 for v in vec]
+#timestamps_vec = [v % 86400 for v in vec]
 
 dyn_cl = dynamic_clusters()
 for t in range(len(timestamps_vec)):
     dyn_cl.add_element(t+1,timestamps_vec[t])
 
-fitting = activity_time(timestamps_vec)
+## NOTE: interval (bin size) is 1800 (1/2 hour) by default, but if the data are very sparse you can increase it
+fitting = activity_time(timestamps_vec,interval=3600.0)
 
-stop = fitting.display_indexes(['trajectories','g','b'],dyn_cl,[]) # plot_options: title, hist_colour, curve_colour
+# close this with a keypress
+#stop = fitting.display_indexes(['trajectories','g','b'],dyn_cl,[]) # plot_options: title, hist_colour, curve_colour
+
+# querying the fitting of new data x:
+# p = fitting.query_model(x%86400)
+# example below
+pc = []
+pf = []
+for v in timestamps_vec:
+    pc.append(dyn_cl.query_clusters(v%86400))
+    pf.append(fitting.query_model(v%86400))
+
+print pf
+plot(pf)
 

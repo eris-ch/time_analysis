@@ -9,10 +9,7 @@ import matplotlib.mlab as mlab
 from scipy.stats import vonmises
 from sklearn.mixture import GMM
 
-sys.path.append("C:\Users\eris\Programs\code\python\lib")
 import directional_statistics as ds
-
-mvm_func = ds.load_mvm_from_R() # von mises fitting by R movMF
 
 class vmm_model:
     def __init__(self,vec,xfit,c,period):
@@ -48,52 +45,27 @@ class activity_time:
         self.bins = binning(self.vec,self.n_bins,self.interval)
         self.xfit = np.arange(0,period+1,300)
     
-        yfit = fit_curve(to_rad(self.xfit,self.period),'v',[max(self.bins),self.kappa,to_rad(self.circ_mu,self.period),1])
-        scale_factor = (sum(self.bins)/self.n_bins) / (sum(yfit)/288)
-        self.yfit_vonm = [y * scale_factor for y in yfit]
+        self.models, self.aic, self.bic = gmm_numpy(self.shifted_vec,5)
+        best = np.argmin(self.bic)
         
-        self.vmm() # self.gmm()
-        
+        self.shifted_xfit = np.arange(self.shifted_0,self.shifted_0+self.period,300)
+        logprob, responsibilities = self.models[best].score_samples(normalize(self.shifted_xfit))
+        pdf = np.exp(logprob)
+
+        scale_factor = (sum(self.bins)/self.n_bins) / (sum(pdf)/(self.period/300))
+        yfit = [y * scale_factor for y in pdf]
+        yfit = np.roll(yfit,int(self.shifted_0/(self.period/300)+1))
+        self.yfit_mm = np.append(yfit,yfit[0])
+        self.comp_fit_mm = []
+
         self.cluster_set = clustering(list(self.shifted_vec),5,self.period,self.interval)
 
-
-    def vmm(self):
-        # run and select von mises mixture models fit
-        max_c = 5        
-        self.models = []
-        self.bic = []
-        for c in range(max_c):
-            self.models.append(vmm_model(self.vec,self.xfit,c+1,self.period))
-            self.bic.append(self.models[-1].bic)
-        best = np.argmin(self.bic) # bic favours lower number of clusters w.r.t. aic
-        if best == 0:
-            self.yfit_mm = self.yfit_vonm
-            self.comp_fit_mm = []
-        else:
-            scale_factor = (sum(self.bins)/self.n_bins) / (sum(self.models[best].yfit)/288)
-            self.yfit_mm = [y * scale_factor for y in self.models[best].yfit]
-            self.comp_fit_mm = [[y * scale_factor * w for y in comp] for (w,comp) in zip(self.models[best].weights,self.models[best].comp_fit)]
-
-    def gmm(self):        
-        # run and select von mises mixture models fit
-        self.models, self.aic, self.bic = gmm_numpy(self.shifted_vec,5)
-        self.shifted_xfit = np.arange(self.shifted_0,self.shifted_0+self.period,self.interval)
-
-        if self.aic:
-            best = np.argmin(self.bic) # bic favours lower number of clusters w.r.t. aic
-            if best == 0:
-                self.yfit_gmm = self.yfit_vonm
-            else:
-                logprob, responsibilities = self.models[best].score_samples(normalize(self.shifted_xfit))
-                pdf = np.exp(logprob)
-                scale_factor = sum(self.bins) / sum(pdf)
-                yfit = [y * scale_factor for y in pdf]
-                yfit = np.roll(yfit,int(self.shifted_0/self.interval)+1)
-                self.yfit_mm = np.append(yfit,yfit[0])
-        self.comp_fit_mm = []
-        #                self.yfit_components = []
-        #                for i in range(len(models[best].means_)):
-        #                    self.yfit_components.append()
+    def query_model(self,x):
+        best = np.argmin(self.bic)        
+        logprob, responsibilities = self.models[best].score_samples(normalize([x]))
+        scale_factor = (sum(self.bins)/self.n_bins)
+        return np.exp(logprob)[0]/scale_factor
+        
             
     def display_indexes(self,plot_options,clusters,save_file):
 
@@ -242,6 +214,10 @@ class dynamic_clusters:
         del self.D[i]
         del self.L[i]
        
+    def query_clusters(self,t):
+        p = np.min([abs(c-t)/(2*l) for (c,l) in zip(self.C,self.L)])
+        return p
+         
 #################################  
 
 def clustering(data_vec,max_c,period,interval):    
@@ -284,7 +260,7 @@ def clustering(data_vec,max_c,period,interval):
             class_circ_std.append(ds.circ_std(class_vec,0,period))
             class_kappa.append(ds.kappa(class_vec,0,period))
             bin_size = int(period/interval)
-            class_bins = binning([c % period for c in class_vec],bin_size)
+            class_bins = binning([c % period for c in class_vec],bin_size,interval)
             class_mode.append(np.argmax(class_bins)*bin_size + bin_size/2)
             class_maxy.append(np.max(class_bins))
             class_wgt.append(class_count[-1]/float(n))
