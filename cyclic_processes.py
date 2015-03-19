@@ -56,16 +56,20 @@ class activity_time:
         yfit = [y * scale_factor for y in pdf]
         yfit = np.roll(yfit,int(self.shifted_0/(self.period/300)+1))
         self.yfit_mm = np.append(yfit,yfit[0])
+        
+        all_pdf_log, resp = self.models[best].score_samples(normalize(np.arange(0,period,1)))
+        self.max_pd = max(np.exp(all_pdf_log))
+        
         self.comp_fit_mm = []
 
         self.cluster_set = clustering(list(self.shifted_vec),5,self.period,self.interval)
 
     def query_model(self,x):
-        best = np.argmin(self.bic)        
-        logprob, responsibilities = self.models[best].score_samples(normalize([x]))
-        scale_factor = (sum(self.bins)/self.n_bins)
-        return np.exp(logprob)[0]/scale_factor
-        
+        best = np.argmin(self.bic)
+        logprob, resp = self.models[best].score_samples(normalize([x]))
+        return np.exp(logprob[0])/self.max_pd
+        #p = self.models[best].predict_proba(normalize([x]))
+        #return sum(p)
             
     def display_indexes(self,plot_options,clusters,save_file):
 
@@ -216,7 +220,7 @@ class dynamic_clusters:
        
     def query_clusters(self,t):
         p = np.min([abs(c-t)/(2*l) for (c,l) in zip(self.C,self.L)])
-        return p
+        return (1-p)
          
 #################################  
 
@@ -460,7 +464,7 @@ def time_wrap(time_vec,period=86400):
     return sorted(wrapped_vec), ind
 
 def binning(vec,n_bins,interval=1800):
-    bins = [0]*n_bins
+    bins = [0]*int(n_bins)
     bin_vec = [int(t/interval) for t in vec]
     for h in bin_vec:
         bins[h] += 1
